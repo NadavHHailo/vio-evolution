@@ -60,6 +60,23 @@ Don't fold three new systems into `catkin_ws_ov/src/` — their dep stacks (Pang
 - **ROS sourcing pattern**: copy [`bench_lib.sh:source_ros()`](/home/hailo/workspace/catkin_ws_ov/scripts/bench_lib.sh#L53-L71) verbatim so `ov_eval` works regardless of the active distro.
 - **Sequences + GT alignment**: same three EuRoC sequences as the cross-platform doc. Stereo + IMU (matches OpenVINS benchmark config).
 
+### Dataset: same data, two on-disk formats
+
+The four systems consume two distinct on-disk formats. They wrap the **same underlying ETH EuRoC sensor recordings** (same camera frames byte-for-byte, same IMU samples byte-for-byte, same ground truth) — so the comparison is fair.
+
+| System | Reads from | Path |
+|---|---|---|
+| OpenVINS | ROS 2 bag (existing, untouched) | `~/datasets/euroc/<seq>/<seq>.db3` |
+| ORB-SLAM3 | EuRoC ASL folder (PNG + CSV) | `~/datasets/euroc-asl/<seq>/mav0/...` |
+| Basalt | EuRoC ASL folder | same as ORB-SLAM3 |
+| SchurVINS | **ROS 1 `.bag`** (confirmed from upstream README: `rosbag play <seq>.bag`) | `~/datasets/euroc-ros1/<seq>.bag` |
+
+**Why not unify**: forcing OpenVINS onto ASL would re-baseline every result already committed to `cross-platform.md` (different input code path → different per-frame timing). Forcing ORB-SLAM3/Basalt onto `.db3` requires writing rosbag2 readers into two upstreams. Both options trade harness simplicity for either lost validation or non-trivial patches. The two-format compromise is cheaper.
+
+**Fair-timing discipline**: each system's reported wall-ms is the **VIO update time** (frontend + backend), *not* the total wall including bag/PNG decode. The OpenVINS harness already separates these via per-stage CSVs; the new systems must replicate the same separation. Bag-vs-PNG I/O time is reported separately, never folded into the VIO comparison number.
+
+**Ground truth**: all four systems evaluate against `catkin_ws_ov/src/open_vins/src/ov_data/euroc/<seq>.txt` (already in `ov_eval` format, derived from EuRoC ASL's `state_groundtruth_estimate0/data.csv`). No GT divergence across systems.
+
 ### Per-system runner contract
 
 `run_system.sh <system> <seq>` must produce all four output files. Anything system-specific (build env, EuRoC config path, output post-processing) lives inside a per-system thin wrapper called by `run_system.sh`. The wrapper's job: launch the binary, capture timing, run the adapter, write the four canonical files.
@@ -76,16 +93,33 @@ All three new systems are non-deterministic by default (multi-threaded frontends
 
 ## Phased rollout (x86)
 
-### Phase 0 — Bootstrap the repo
+### Phase 0a — Bootstrap the repo ✅ DONE
 
-1. Create empty repo `NadavHHailo/vio-evolution` on GitHub (UI or `gh repo create NadavHHailo/vio-evolution --private`).
-2. Fork upstream for each of the three submodules into `NadavHHailo/`:
-   - `gh repo fork UZ-SLAMLab/ORB_SLAM3 --clone=false` → `NadavHHailo/ORB_SLAM3`
-   - `NadavHHailo/basalt` — upstream is on GitLab, so `gh repo fork` won't work. Mirror it: `git clone --mirror https://gitlab.com/VladyslavUsenko/basalt.git`, then push to a new empty `NadavHHailo/basalt` GitHub repo with `git push --mirror`.
-   - `gh repo fork bytedance/SchurVINS --clone=false` → `NadavHHailo/SchurVINS`
-3. Locally: `cd /home/hailo/workspace && git clone git@github.com:NadavHHailo/vio-evolution.git && cd vio-evolution`.
-4. Create the directory skeleton (`systems/`, `scripts/adapters/`, `docs/`) and an initial `.gitignore` (ignore `build/`, `install/`, `*.log`, local results).
-5. First commit: README + empty skeleton, then push.
+1. ✅ Empty repo `NadavHHailo/vio-evolution` created on GitHub (web UI, no `gh` CLI installed).
+2. ✅ Local clone at `/home/hailo/workspace/vio-evolution/` with skeleton (`systems/`, `scripts/adapters/`, `docs/`), `README.md`, `.gitignore`, and `docs/plan.md` (copy of this file).
+3. ✅ Initial commit `72707c5` pushed to `origin/main`.
+
+### Phase 0b — Dataset preparation (ASL + ROS 1 .bag alongside .db3)
+
+Currently `~/datasets/euroc/` contains only ROS 2 bags. Need to add two more formats side-by-side: ASL for ORB-SLAM3/Basalt, and ROS 1 `.bag` for SchurVINS.
+
+1. Download the three EuRoC ASL zips from the ETH page (https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) into `~/datasets/euroc-asl/`:
+   - `V1_01_easy.zip` (~1.4 GB), `MH_03_medium.zip` (~1.5 GB), `V2_02_medium.zip` (~1.6 GB).
+   - Unzip each into `~/datasets/euroc-asl/<seq>/` so the layout is `~/datasets/euroc-asl/<seq>/mav0/{cam0,cam1,imu0,state_groundtruth_estimate0}/...`.
+2. Download the three EuRoC ROS 1 bags from the same ETH page into `~/datasets/euroc-ros1/`:
+   - `V1_01_easy.bag`, `MH_03_medium.bag`, `V2_02_medium.bag` (similar sizes to the .db3 bags).
+3. Verify the ASL `state_groundtruth_estimate0/data.csv` and the existing `catkin_ws_ov/src/open_vins/src/ov_data/euroc/<seq>.txt` refer to the same trajectory (sanity check — they should, modulo OpenVINS' format conversion).
+
+This keeps `~/datasets/euroc/` (existing `.db3` path for OpenVINS) untouched. Total additional disk: ~9 GB across the three sequences in two formats.
+
+### Phase 0c — Fork the three upstreams into NadavHHailo/
+
+1. `NadavHHailo/ORB_SLAM3` — via GitHub web "Fork" button on https://github.com/UZ-SLAMLab/ORB_SLAM3 (no `gh` CLI installed).
+2. `NadavHHailo/SchurVINS` — via GitHub web "Fork" button on https://github.com/bytedance/SchurVINS.
+3. `NadavHHailo/basalt` — upstream is on GitLab. Mirror manually:
+   - Create empty `NadavHHailo/basalt` on GitHub web UI.
+   - `git clone --mirror https://gitlab.com/VladyslavUsenko/basalt.git /tmp/basalt-mirror`
+   - `cd /tmp/basalt-mirror && git push --mirror git@github.com:NadavHHailo/basalt.git`
 
 ### Phase 1 — Harness validation on ORB-SLAM3 (smoothest first)
 
@@ -99,28 +133,29 @@ Steps:
 5. End-to-end smoke test: run all three sequences × 5 reps. Verify `run_eval.sh` outputs sensible ATE on V1_01_easy (expect sub-10 cm RMSE — ORB-SLAM3 paper reports ~0.04 m on V1_01).
 6. **Gate**: harness is valid if `compare_report.py` emits a table with both `openvins` and `orb_slam3` rows side-by-side, fed from `~/results/{openvins,orb_slam3}/x86/native_jazzy/...`.
 
-### Phase 2 — SchurVINS
+### Phase 2 — Basalt
 
-Closest to OpenVINS architecturally (Schur-complement filter, paper directly benchmarks against OpenVINS) → most informative head-to-head once the harness exists.
-
-Steps:
-1. Add SchurVINS as a submodule at `vio-evolution/systems/schurvins/`. Build (SVO-based stack: Eigen, OpenCV, Sophus, glog, yaml-cpp). Check the upstream README for EuRoC instructions — if it expects ROS1, run it from a ROS1 noetic Docker (parallel to the openvins-humble pattern, but x86-native ROS1 sidecar). If it has a standalone offline runner, prefer that.
-2. Write the system-specific runner: launch SchurVINS on each sequence (bag or image folder, depending on what upstream supports), capture pose stream.
-3. Adapter `adapters/schurvins_to_tum.py`: convert whatever SchurVINS emits (ROS topic dump if ROS-based, file otherwise) to the canonical TUM trajectory.
-4. Timing: instrument the SchurVINS frontend/backend dispatch points if no built-in CSV. Worst case, expose only `total` and accept reduced per-stage breakdown.
-5. 5-rep run × 3 sequences; cross-check against numbers in the SchurVINS CVPR 2024 paper Table 2 (ATE on EuRoC).
-
-### Phase 3 — Basalt
-
-Last because: heaviest deps (TBB, Pangolin, custom Sophus fork, ROS bindings are dated), and the offline `basalt_vio` CLI requires its own JSON config conversion from EuRoC's Kalibr YAMLs.
+Second because: still a standalone CMake build (no ROS dependency for offline VIO), same dataset format (EuRoC ASL) as Phase 1, so the harness scaffold from Phase 1 transfers almost verbatim. Heavier deps than ORB-SLAM3 (TBB, Pangolin, custom Sophus fork) but no Docker/distro juggling.
 
 Steps:
 1. Add Basalt as a submodule at `vio-evolution/systems/basalt/` (Basalt vendors `basalt-headers` as its own submodule, so a recursive `git submodule update --init --recursive` after adding it picks both up). Build natively (CMake + TBB + Pangolin). Document gotchas in `vio-evolution/docs/build-basalt.md`.
 2. Reuse the EuRoC calibration JSON shipped in Basalt's `data/euroc_ds_calib.json` if present, or convert from `kalibr_imucam_chain.yaml` if upstream stopped shipping it.
-3. Runner: invoke `basalt_vio --dataset-path ~/datasets/euroc/<seq> --cam-calib <calib.json> --config-path data/euroc_config.json --result-path /tmp/basalt_traj.txt`.
+3. Runner: invoke `basalt_vio --dataset-path ~/datasets/euroc-asl/<seq> --cam-calib <calib.json> --config-path data/euroc_config.json --result-path /tmp/basalt_traj.txt`.
 4. Adapter `adapters/basalt_to_tum.py`: Basalt's trajectory output is already TUM-formatted text — just normalize timestamp units and rename.
 5. Timing: Basalt's `--show-gui` mode logs per-frame stats; offline mode dumps them to stderr — capture and parse.
 6. 5-rep run × 3 sequences; cross-check against Basalt RA-L 2020 Table 2 (ATE on EuRoC).
+
+### Phase 3 — SchurVINS (heaviest friction — ROS 1 Melodic in Docker)
+
+Last because the integration friction is qualitatively different: SchurVINS' upstream README mandates **Ubuntu 18.04 + ROS 1 Melodic**, both EOL. Neither runs natively on the host (24.04 Noble). Realistic path is a Melodic Docker container, mirroring the `openvins-humble:latest` pattern that `catkin_ws_ov` already uses for `rpi5-T`.
+
+Steps:
+1. Add SchurVINS as a submodule at `vio-evolution/systems/schurvins/`.
+2. Write `vio-evolution/systems/schurvins/Dockerfile` based on `osrf/ros:melodic-desktop`. Install SVO/SchurVINS deps (Eigen, OpenCV 3.x, Sophus, glog, yaml-cpp) and `catkin_make` the SchurVINS workspace inside the image. Pin the base image digest for reproducibility.
+3. System runner mounts `~/datasets/euroc-ros1/` and `~/results/schurvins/` into the container; runs `roslaunch svo_ros euroc_vio_stereo.launch` + a sidecar `rosbag play <seq>.bag --rate 1.0`. Capture the published odometry topic (likely `/svo/pose` or `/svo/odometry` — confirm against the launch file) to a TUM-format file via a thin `rostopic echo` + adapter.
+4. Adapter `adapters/schurvins_to_tum.py`: parse the captured topic dump → canonical `<seq>_trajectory.txt`.
+5. Timing: instrument SchurVINS' frontend/backend dispatch points if no built-in CSV. Worst case, expose only `total` (wall ms per processed frame from log lines) and accept reduced per-stage breakdown.
+6. 5-rep run × 3 sequences; cross-check against numbers in the SchurVINS CVPR 2024 paper Table 2 (ATE on EuRoC).
 
 ### Phase 4 — Comparison report
 
@@ -170,7 +205,7 @@ End-to-end correctness gates (run after each phase):
 
 Reproducible end-to-end check (single command, full sweep):
 ```bash
-for sys in openvins orb_slam3 schurvins basalt; do
+for sys in openvins orb_slam3 basalt schurvins; do
   for seq in V1_01_easy MH_03_medium V2_02_medium; do
     bash vio-evolution/scripts/run_system.sh "$sys" "$seq" --reps 5 --tag baseline_x86
   done
