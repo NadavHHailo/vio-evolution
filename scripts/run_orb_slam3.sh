@@ -53,6 +53,7 @@ for i in $(seq 0 $((REPS-1))); do
   ( cd "$WORK" && /usr/bin/time -v -o time.log \
       "$BIN" "$VOC" "$YAML" "$ASL" "$TIMES" "$SEQ" >stdout.log 2>&1 )
   python3 "$ADAPTER" "$WORK/f_$SEQ.txt" "$OUT/${SEQ}_rep${i}_trajectory.txt" "$GT"
+  cp "$WORK/${SEQ}_timing.csv" "$OUT/${SEQ}_rep${i}_timing.csv"
   awk '
     /Maximum resident set size/ {rss=$NF}
     /User time/                 {usr=$NF}

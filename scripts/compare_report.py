@@ -63,16 +63,39 @@ def peak_rss_mb(proc_csv):
         return None
 
 
+def median_frontend_ms(timing_csv):
+    vals = []
+    try:
+        with open(timing_csv) as f:
+            next(f)  # header
+            for line in f:
+                p = line.split(",")
+                if len(p) >= 2 and p[1] != "nan":
+                    try:
+                        vals.append(float(p[1]))
+                    except ValueError:
+                        pass
+    except OSError:
+        return None
+    return statistics.median(vals) if vals else None
+
+
 def eval_orb(root, tag, seq, gt, align):
     trajs = sorted(glob.glob(f"{root}/orb_slam3/x86/native_jazzy/{tag}/{seq}_rep*_trajectory.txt"))
-    pos, rss = [], []
+    pos, rss, fe = [], [], []
     for t in trajs:
         _, p = ate(gt, t, align)
         pos.append(p)
         r = peak_rss_mb(t.replace("_trajectory.txt", "_proc.csv"))
         if r:
             rss.append(r)
-    return agg(pos), (statistics.mean(rss) if rss else None), len(trajs)
+        m = median_frontend_ms(t.replace("_trajectory.txt", "_timing.csv"))
+        if m:
+            fe.append(m)
+    return (agg(pos),
+            (statistics.mean(rss) if rss else None),
+            (statistics.mean(fe) if fe else None),
+            len(trajs))
 
 
 def eval_openvins(root, tag, seq, gt, align, explicit):
@@ -108,19 +131,24 @@ def main():
     for seq in args.seqs.split(","):
         gt = f"{GT_DIR}/{seq}.txt"
         ov, ov_n = eval_openvins(args.root, args.tag, seq, gt, args.align, args.openvins_est)
-        orb, orb_rss, orb_n = eval_orb(args.root, args.tag, seq, gt, args.align)
-        rows.append(("openvins", seq, ov, None, ov_n))
-        rows.append(("orb_slam3", seq, orb, orb_rss, orb_n))
+        orb, orb_rss, orb_fe, orb_n = eval_orb(args.root, args.tag, seq, gt, args.align)
+        rows.append(("openvins", seq, ov, None, None, ov_n))
+        rows.append(("orb_slam3", seq, orb, orb_rss, orb_fe, orb_n))
 
     lines = [
-        f"# VIO comparison (Phase 1) — ATE, align={args.align}, tag={args.tag}",
+        f"# VIO comparison (Phase 1) — align={args.align}, tag={args.tag}",
         "",
-        "| System | Sequence | ATE pos RMSE (m) | Peak RSS (MB) | reps |",
-        "|---|---|---|---|---|",
+        "Frontend ms/frame = median per-frame tracking latency. ORB-SLAM3's heavy backend "
+        "(local BA) runs on a separate async thread, off the per-frame critical path, so it "
+        "is not in this number.",
+        "",
+        "| System | Sequence | ATE pos RMSE (m) | Frontend ms/frame | Peak RSS (MB) | reps |",
+        "|---|---|---|---|---|---|",
     ]
-    for sys_, seq, a, rss, n in rows:
+    for sys_, seq, a, rss, fe, n in rows:
         rss_cell = f"{rss:.0f}" if rss else "—"
-        lines.append(f"| {sys_} | {seq} | {fmt(a)} | {rss_cell} | {n} |")
+        fe_cell = f"{fe:.1f}" if fe else "—"
+        lines.append(f"| {sys_} | {seq} | {fmt(a)} | {fe_cell} | {rss_cell} | {n} |")
     report = "\n".join(lines)
     print(report)
     if args.out:
