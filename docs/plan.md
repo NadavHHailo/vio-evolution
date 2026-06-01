@@ -12,14 +12,14 @@ The OpenVINS evaluation pipeline in [`catkin_ws_ov/`](/home/hailo/workspace/catk
 
 ## Design
 
-### Layout (new sibling git repo: `NadavHHailo/vio-evolution`)
+### Layout (new sibling git repo: `NadavHHailo/vio-evaluation`)
 
-Don't fold three new systems into `catkin_ws_ov/src/` — their dep stacks (Pangolin, DBoW2, TBB, custom Sophus) will fight OpenVINS' ROS2 environment. Create a new sibling git repo at `https://github.com/NadavHHailo/vio-evolution`, cloned locally to `/home/hailo/workspace/vio-evolution/`:
+Don't fold three new systems into `catkin_ws_ov/src/` — their dep stacks (Pangolin, DBoW2, TBB, custom Sophus) will fight OpenVINS' ROS2 environment. Create a new sibling git repo at `https://github.com/NadavHHailo/vio-evaluation`, cloned locally to `/home/hailo/workspace/vio-evaluation/`:
 
 ```
 /home/hailo/workspace/
   catkin_ws_ov/                    # existing — OpenVINS (untouched)
-  vio-evolution/                   # NEW git repo (NadavHHailo/vio-evolution)
+  vio-evaluation/                   # NEW git repo (NadavHHailo/vio-evaluation)
     .gitmodules                    # pins the three submodules below
     systems/
       orb_slam3/                   # submodule → NadavHHailo/ORB_SLAM3 (fork of UZ-SLAMLab/ORB_SLAM3)
@@ -39,7 +39,7 @@ Don't fold three new systems into `catkin_ws_ov/src/` — their dep stacks (Pang
 
 **All three submodules are forked into `NadavHHailo/` first**, then submoduled from the fork (not from upstream). Same pattern as `catkin_ws_ov/src/open_vins` → `NadavHHailo/open_vins`. This is non-optional: at least SchurVINS will almost certainly need timing-instrumentation patches, and likely ORB-SLAM3 will need a small patch to dump per-frame timing as CSV — both require a writable fork. The OpenVINS submodule-management workflow in [`catkin_ws_ov/CLAUDE.md`](/home/hailo/workspace/catkin_ws_ov/CLAUDE.md) (push fork before bumping outer pointer; track branch independently from outer repo) applies verbatim to each new submodule.
 
-**OpenVINS is intentionally *not* a submodule of `vio-evolution/`.** It only builds inside a ROS 2 colcon workspace, which `catkin_ws_ov/` already provides — duplicating that under `vio-evolution/systems/openvins/` would give you a non-buildable tree. Instead, OpenVINS benchmark numbers come from running the existing [`catkin_ws_ov/scripts/run_full_benchmark.sh`](/home/hailo/workspace/catkin_ws_ov/scripts/run_full_benchmark.sh) and are picked up by `compare_report.py` from `~/results/openvins/<arch>/<env>/<tag>/` alongside the new three. The "four-system comparison" framing lives in the report and aggregator, not the directory layout.
+**OpenVINS is intentionally *not* a submodule of `vio-evaluation/`.** It only builds inside a ROS 2 colcon workspace, which `catkin_ws_ov/` already provides — duplicating that under `vio-evaluation/systems/openvins/` would give you a non-buildable tree. Instead, OpenVINS benchmark numbers come from running the existing [`catkin_ws_ov/scripts/run_full_benchmark.sh`](/home/hailo/workspace/catkin_ws_ov/scripts/run_full_benchmark.sh) and are picked up by `compare_report.py` from `~/results/openvins/<arch>/<env>/<tag>/` alongside the new three. The "four-system comparison" framing lives in the report and aggregator, not the directory layout.
 
 ### Output convention (mirrors existing OpenVINS layout)
 
@@ -56,7 +56,7 @@ Don't fold three new systems into `catkin_ws_ov/src/` — their dep stacks (Pang
 ### Reused components
 
 - **Ground truth**: `catkin_ws_ov/src/open_vins/src/ov_data/euroc/{V1_01_easy,MH_03_medium,V2_02_medium}.txt` — the same GT files OpenVINS already uses. No re-export needed.
-- **ATE/RPE engine**: `ros2 run ov_eval error_singlerun posyaw <gt> <est> 8 16 24 32 40` — called via [`run_eval.sh`](/home/hailo/workspace/vio-evolution/scripts/run_eval.sh). One-shot per estimate file, no need to reimplement.
+- **ATE/RPE engine**: `ros2 run ov_eval error_singlerun posyaw <gt> <est> 8 16 24 32 40` — called via [`run_eval.sh`](/home/hailo/workspace/vio-evaluation/scripts/run_eval.sh). One-shot per estimate file, no need to reimplement.
 - **ROS sourcing pattern**: copy [`bench_lib.sh:source_ros()`](/home/hailo/workspace/catkin_ws_ov/scripts/bench_lib.sh#L53-L71) verbatim so `ov_eval` works regardless of the active distro.
 - **Sequences + GT alignment**: same three EuRoC sequences as the cross-platform doc. Stereo + IMU (matches OpenVINS benchmark config).
 
@@ -95,8 +95,8 @@ All three new systems are non-deterministic by default (multi-threaded frontends
 
 ### Phase 0a — Bootstrap the repo ✅ DONE
 
-1. ✅ Empty repo `NadavHHailo/vio-evolution` created on GitHub (web UI, no `gh` CLI installed).
-2. ✅ Local clone at `/home/hailo/workspace/vio-evolution/` with skeleton (`systems/`, `scripts/adapters/`, `docs/`), `README.md`, `.gitignore`, and `docs/plan.md` (copy of this file).
+1. ✅ Empty repo `NadavHHailo/vio-evaluation` created on GitHub (web UI, no `gh` CLI installed).
+2. ✅ Local clone at `/home/hailo/workspace/vio-evaluation/` with skeleton (`systems/`, `scripts/adapters/`, `docs/`), `README.md`, `.gitignore`, and `docs/plan.md` (copy of this file).
 3. ✅ Initial commit `72707c5` pushed to `origin/main`.
 
 ### Phase 0b — Dataset preparation (ASL + ROS 1 .bag alongside .db3)
@@ -126,8 +126,8 @@ This keeps `~/datasets/euroc/` (existing `.db3` path for OpenVINS) untouched. To
 ORB-SLAM3 first because: ships a ready-made [`Examples/Stereo-Inertial/stereo_inertial_euroc`](https://github.com/UZ-SLAMLab/ORB_SLAM3) with EuRoC configs and `EuRoC_TimeStamps/`, has a well-known TUM-format trajectory output (`CameraTrajectory.txt`), and the largest community → least time spent debugging build issues. Validating the full harness end-to-end here de-risks the other two.
 
 Steps:
-1. Add ORB-SLAM3 as a submodule at `vio-evolution/systems/orb_slam3/` (`git submodule add <url> systems/orb_slam3`). Pin to a known-good tag. Build natively on x86 (Pangolin, OpenCV ≥3, Eigen3, DBoW2/g2o vendored). Document exact build incantation in `vio-evolution/docs/build-orb-slam3.md`.
-2. Write `vio-evolution/systems/orb_slam3/run.sh` — invokes `stereo_inertial_euroc` against the EuRoC bag dirs already at `~/datasets/euroc/`. Note: ORB-SLAM3 wants the *image folder* layout (`mav0/cam0/data/*.png`), not the rosbag — confirm the dataset on disk has both.
+1. Add ORB-SLAM3 as a submodule at `vio-evaluation/systems/orb_slam3/` (`git submodule add <url> systems/orb_slam3`). Pin to a known-good tag. Build natively on x86 (Pangolin, OpenCV ≥3, Eigen3, DBoW2/g2o vendored). Document exact build incantation in `vio-evaluation/docs/build-orb-slam3.md`.
+2. Write `vio-evaluation/systems/orb_slam3/run.sh` — invokes `stereo_inertial_euroc` against the EuRoC bag dirs already at `~/datasets/euroc/`. Note: ORB-SLAM3 wants the *image folder* layout (`mav0/cam0/data/*.png`), not the rosbag — confirm the dataset on disk has both.
 3. Adapter `adapters/orb_slam3_to_tum.py`: convert `CameraTrajectory.txt` (already TUM-ish, but timestamps may be in ns vs the GT's seconds) to the canonical `<seq>_trajectory.txt`. Validate timestamp alignment against GT.
 4. Timing: ORB-SLAM3 exposes `Tracking::vdTrackTotal_ms` etc. — enable the dump (or patch a one-shot CSV writer onto the example main). Normalize to `timestamp,frontend,backend,total`.
 5. End-to-end smoke test: run all three sequences × 5 reps. Verify `run_eval.sh` outputs sensible ATE on V1_01_easy (expect sub-10 cm RMSE — ORB-SLAM3 paper reports ~0.04 m on V1_01).
@@ -138,7 +138,7 @@ Steps:
 Second because: still a standalone CMake build (no ROS dependency for offline VIO), same dataset format (EuRoC ASL) as Phase 1, so the harness scaffold from Phase 1 transfers almost verbatim. Heavier deps than ORB-SLAM3 (TBB, Pangolin, custom Sophus fork) but no Docker/distro juggling.
 
 Steps:
-1. Add Basalt as a submodule at `vio-evolution/systems/basalt/` (Basalt vendors `basalt-headers` as its own submodule, so a recursive `git submodule update --init --recursive` after adding it picks both up). Build natively (CMake + TBB + Pangolin). Document gotchas in `vio-evolution/docs/build-basalt.md`.
+1. Add Basalt as a submodule at `vio-evaluation/systems/basalt/` (Basalt vendors `basalt-headers` as its own submodule, so a recursive `git submodule update --init --recursive` after adding it picks both up). Build natively (CMake + TBB + Pangolin). Document gotchas in `vio-evaluation/docs/build-basalt.md`.
 2. Reuse the EuRoC calibration JSON shipped in Basalt's `data/euroc_ds_calib.json` if present, or convert from `kalibr_imucam_chain.yaml` if upstream stopped shipping it.
 3. Runner: invoke `basalt_vio --dataset-path ~/datasets/euroc-asl/<seq> --cam-calib <calib.json> --config-path data/euroc_config.json --result-path /tmp/basalt_traj.txt`.
 4. Adapter `adapters/basalt_to_tum.py`: Basalt's trajectory output is already TUM-formatted text — just normalize timestamp units and rename.
@@ -150,8 +150,8 @@ Steps:
 Last because the integration friction is qualitatively different: SchurVINS' upstream README mandates **Ubuntu 18.04 + ROS 1 Melodic**, both EOL. Neither runs natively on the host (24.04 Noble). Realistic path is a Melodic Docker container, mirroring the `openvins-humble:latest` pattern that `catkin_ws_ov` already uses for `rpi5-T`.
 
 Steps:
-1. Add SchurVINS as a submodule at `vio-evolution/systems/schurvins/`.
-2. Write `vio-evolution/systems/schurvins/Dockerfile` based on `osrf/ros:melodic-desktop`. Install SVO/SchurVINS deps (Eigen, OpenCV 3.x, Sophus, glog, yaml-cpp) and `catkin_make` the SchurVINS workspace inside the image. Pin the base image digest for reproducibility.
+1. Add SchurVINS as a submodule at `vio-evaluation/systems/schurvins/`.
+2. Write `vio-evaluation/systems/schurvins/Dockerfile` based on `osrf/ros:melodic-desktop`. Install SVO/SchurVINS deps (Eigen, OpenCV 3.x, Sophus, glog, yaml-cpp) and `catkin_make` the SchurVINS workspace inside the image. Pin the base image digest for reproducibility.
 3. System runner mounts `~/datasets/euroc-ros1/` and `~/results/schurvins/` into the container; runs `roslaunch svo_ros euroc_vio_stereo.launch` + a sidecar `rosbag play <seq>.bag --rate 1.0`. Capture the published odometry topic (likely `/svo/pose` or `/svo/odometry` — confirm against the launch file) to a TUM-format file via a thin `rostopic echo` + adapter.
 4. Adapter `adapters/schurvins_to_tum.py`: parse the captured topic dump → canonical `<seq>_trajectory.txt`.
 5. Timing: instrument SchurVINS' frontend/backend dispatch points if no built-in CSV. Worst case, expose only `total` (wall ms per processed frame from log lines) and accept reduced per-stage breakdown.
@@ -165,26 +165,26 @@ Once all four systems have populated `~/results/<system>/x86/native_jazzy/<tag>/
    - **Headline table**: per-sequence ATE (m, mean±std), wall-ms/frame (mean±std), peak RSS (MB).
    - **Per-stage timing**: where available, side-by-side frontend/backend ms. Note which systems only expose `total` (likely SchurVINS).
    - **Ranking**: vs OpenVINS x86-J as the baseline (matches existing cross-platform.md convention).
-2. Render the report to `vio-evolution/docs/comparison.md` following the same style as [`cross-platform.md` §2.1](/home/hailo/workspace/catkin_ws_ov/docs/cross-platform/cross-platform.md#21-subscribe-summary-across-sequences--the-at-a-glance-table) — citations per table, reproducible invocation block at the top, known caveats called out (e.g., ORB-SLAM3's loop closure makes ATE strictly better than pure VIO — flag it).
+2. Render the report to `vio-evaluation/docs/comparison.md` following the same style as [`cross-platform.md` §2.1](/home/hailo/workspace/catkin_ws_ov/docs/cross-platform/cross-platform.md#21-subscribe-summary-across-sequences--the-at-a-glance-table) — citations per table, reproducible invocation block at the top, known caveats called out (e.g., ORB-SLAM3's loop closure makes ATE strictly better than pure VIO — flag it).
 
 ---
 
 ## Critical files to read/modify
 
 **Reused (no edits)**:
-- [`catkin_ws_ov/scripts/bench_lib.sh`](/home/hailo/workspace/catkin_ws_ov/scripts/bench_lib.sh) — copy `source_ros()` and `detect_ros_distro()` patterns into `vio-evolution/scripts/run_eval.sh`.
+- [`catkin_ws_ov/scripts/bench_lib.sh`](/home/hailo/workspace/catkin_ws_ov/scripts/bench_lib.sh) — copy `source_ros()` and `detect_ros_distro()` patterns into `vio-evaluation/scripts/run_eval.sh`.
 - [`catkin_ws_ov/scripts/parse_results.py`](/home/hailo/workspace/catkin_ws_ov/scripts/parse_results.py) — reference for the `error_singlerun` invocation form (lines 69-100); reuse same ANSI strip + RPE regex.
 - `catkin_ws_ov/src/open_vins/src/ov_data/euroc/*.txt` — ground truth files.
 
 **New (to be created)**:
-- `vio-evolution/` itself — `git init` + initial `.gitignore` (results/build artifacts).
-- `vio-evolution/.gitmodules` — three submodules (orb_slam3, basalt, schurvins), pinned to upstream tags or fork commits.
-- `vio-evolution/scripts/run_system.sh` — entrypoint dispatcher.
-- `vio-evolution/scripts/run_eval.sh` — `ov_eval` wrapper.
-- `vio-evolution/scripts/adapters/{orb_slam3,basalt,schurvins}_to_tum.py` — trajectory converters.
-- `vio-evolution/scripts/compare_report.py` — cross-system aggregator.
-- `vio-evolution/systems/<system>/run.sh` — per-system launcher (3 files).
-- `vio-evolution/docs/{build-orb-slam3,build-basalt,build-schurvins,comparison}.md`.
+- `vio-evaluation/` itself — `git init` + initial `.gitignore` (results/build artifacts).
+- `vio-evaluation/.gitmodules` — three submodules (orb_slam3, basalt, schurvins), pinned to upstream tags or fork commits.
+- `vio-evaluation/scripts/run_system.sh` — entrypoint dispatcher.
+- `vio-evaluation/scripts/run_eval.sh` — `ov_eval` wrapper.
+- `vio-evaluation/scripts/adapters/{orb_slam3,basalt,schurvins}_to_tum.py` — trajectory converters.
+- `vio-evaluation/scripts/compare_report.py` — cross-system aggregator.
+- `vio-evaluation/systems/<system>/run.sh` — per-system launcher (3 files).
+- `vio-evaluation/docs/{build-orb-slam3,build-basalt,build-schurvins,comparison}.md`.
 
 **Existing untouched**:
 - All of `catkin_ws_ov/` — OpenVINS pipeline keeps producing baseline numbers from existing `run_full_benchmark.sh` invocations.
@@ -201,23 +201,23 @@ End-to-end correctness gates (run after each phase):
    - Timing CSVs have ≥2000 rows per sequence (every EuRoC bag has >2000 frames; matches `MIN_ROWS_FOR_COMPLETE_RUN` check in [bench_lib.sh:214](/home/hailo/workspace/catkin_ws_ov/scripts/bench_lib.sh#L214)).
 2. **Per-system smoke** (after each system added): `run_system.sh <sys> V1_01_easy` produces all four canonical output files; trajectory file passes a TUM-format syntactic check (`python3 -c "import numpy as np; np.loadtxt('<file>'); assert np.loadtxt('<file>').shape[1] == 8"`).
 3. **Numbers cross-check**: each system's V1_01_easy ATE is within ~2× of the value in its respective paper. Discrepancies > 2× indicate config or alignment bugs (likely culprit: timestamp units or stereo extrinsics not picked up from EuRoC's `mav0/cam{0,1}/sensor.yaml`).
-4. **Final comparison table**: re-render `vio-evolution/docs/comparison.md` from a clean re-run of `compare_report.py` against `~/results/*/x86/native_jazzy/<tag>/`. Spot-check one cell per system against its source CSV.
+4. **Final comparison table**: re-render `vio-evaluation/docs/comparison.md` from a clean re-run of `compare_report.py` against `~/results/*/x86/native_jazzy/<tag>/`. Spot-check one cell per system against its source CSV.
 
 Reproducible end-to-end check (single command, full sweep):
 ```bash
 for sys in openvins orb_slam3 basalt schurvins; do
   for seq in V1_01_easy MH_03_medium V2_02_medium; do
-    bash vio-evolution/scripts/run_system.sh "$sys" "$seq" --reps 5 --tag baseline_x86
+    bash vio-evaluation/scripts/run_system.sh "$sys" "$seq" --reps 5 --tag baseline_x86
   done
 done
-python3 vio-evolution/scripts/compare_report.py ~/results --tag baseline_x86 --out vio-evolution/docs/comparison.md
+python3 vio-evaluation/scripts/compare_report.py ~/results --tag baseline_x86 --out vio-evaluation/docs/comparison.md
 ```
 
 ---
 
 ## Out of scope (deferred)
 
-- **RPi5 / Hailo embedded targets** — explicitly Phase-5+. Once `vio-evolution/` works on x86, the same per-system Docker-image pattern that gave OpenVINS its `rpi5-T` (openvins-humble container) can be repeated per system. Don't pre-design the Dockerfiles now; the constraints will be system-specific and easier to address once the x86 harness exists.
+- **RPi5 / Hailo embedded targets** — explicitly Phase-5+. Once `vio-evaluation/` works on x86, the same per-system Docker-image pattern that gave OpenVINS its `rpi5-T` (openvins-humble container) can be repeated per system. Don't pre-design the Dockerfiles now; the constraints will be system-specific and easier to address once the x86 harness exists.
 - **Loop closure fairness debate** — ORB-SLAM3 will look unfairly good on ATE because of its loop closure. Note it in the report; don't try to disable it (configuration surgery that diverges from "stock" defeats the point of the comparison).
 - **Additional sequences** beyond V1_01/MH_03/V2_02 — leave for later. The existing three are what OpenVINS cross-platform.md uses; comparing on the same set is the priority.
 - **Multi-rate / threading sweeps** — defer until the four-system baseline is stable. The existing OpenVINS `--rate` and `--threads` sweep dimensions can be added back per-system once each runs cleanly at the default (1.0 rate, stock thread count).

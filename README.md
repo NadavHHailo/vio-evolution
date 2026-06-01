@@ -1,4 +1,4 @@
-# vio-evolution
+# vio-evaluation
 
 Comparative evaluation of four visual-inertial estimation systems on EuRoC MAV: **OpenVINS**, **Basalt**, **ORB-SLAM3**, **SchurVINS**. Measures trajectory accuracy (ATE/RPE), per-frame runtime, and resource footprint (CPU%, peak RSS) on the same three sequences (V1_01_easy, MH_03_medium, V2_02_medium), against the same ground truth.
 
@@ -12,7 +12,7 @@ A unified, runnable open-source harness comparing OpenVINS, Basalt, ORB-SLAM3, a
 - **Each system's own paper** publishes an EuRoC comparison table, but each picks its own competitors and harness. The [SchurVINS CVPR 2024 paper](https://openaccess.thecvf.com/content/CVPR2024/papers/Fan_SchurVINS_Schur_Complement-Based_Lightweight_Visual_Inertial_Navigation_System_CVPR_2024_paper.pdf) publishes ATE/runtime tables against OpenVINS (Table 2), but the [SchurVINS GitHub release](https://github.com/bytedance/SchurVINS) only exposes the code, not the comparison harness that produced those numbers — so the tables can't be independently re-run without rebuilding the evaluation pipeline from scratch (which is what this repo does).
 - **Open-source evaluation tooling** is post-hoc only: [`rpg_trajectory_evaluation`](https://github.com/uzh-rpg/rpg_trajectory_evaluation), [`evo`](https://github.com/MichaelGrupp/evo), and [`ov_eval`](https://github.com/rpng/open_vins/tree/master/ov_eval) (which this repo reuses) all compute ATE/RPE from a pair of trajectory files. None of them build, run, or instrument the VIO systems for you.
 
-`vio-evolution` is the missing harness layer between the system code and the evaluation tools.
+`vio-evaluation` is the missing harness layer between the system code and the evaluation tools.
 
 ## The plan in one paragraph
 
