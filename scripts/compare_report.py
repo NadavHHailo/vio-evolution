@@ -274,7 +274,7 @@ def main():
     for seq in args.seqs.split(","):
         gt = f"{GT_DIR}/{seq}.txt"
         ovM, ovn = eval_openvins(args.root, args.tag, seq, gt, args.align, args.openvins_thr)
-        rows.append((f"openvins ({args.openvins_thr}thr)", seq, ovM, ovn))
+        rows.append(("openvins", seq, ovM, ovn))
         orbM, orbn = eval_orb(args.root, args.tag, seq, gt, args.align)
         rows.append(("orb_slam3 (SLAM)", seq, orbM, orbn))
         vioM, vion = eval_orb(args.root, f"{args.tag}_vioonly", seq, gt, args.align)
@@ -293,9 +293,9 @@ def main():
         "in **sequential** mode, reported as **(SLAM)** (loop closure on) and **(VIO-only)** "
         "(`loopClosing:0`). **x86 performance figures are illustrative** (DR: perf belongs on "
         "embedded HW); ORB-SLAM3's backend (local BA) is async, so latency/FPS reflect the "
-        "per-frame tracking front-end. OpenVINS runs in **serial** mode (single-thread by "
-        "default); its latency/FPS use the per-frame `total` update time, and RSS is left "
-        "blank (not captured by the OpenVINS benchmark harness).",
+        "per-frame tracking front-end. **OpenVINS runs in serial mode, single-thread (1thr)**; "
+        "its latency/FPS use the per-frame `total` update time, and RSS is left blank (not "
+        "captured by the OpenVINS benchmark harness).",
         "",
         "## §3.1 Summary (RPE columns = mean over segment lengths)",
         "",
