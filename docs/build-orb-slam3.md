@@ -58,7 +58,11 @@ Artifacts: `lib/libORB_SLAM3.so`, `Examples/Stereo-Inertial/stereo_inertial_euro
   `scripts/adapters/orb_slam3_to_tum.py` divides by 1e9 → canonical seconds.
 - Set `LD_LIBRARY_PATH` to include `~/opt/pangolin/lib` and the ORB-SLAM3/Thirdparty libs.
 
-See [`systems/orb_slam3/run.sh`](../systems/orb_slam3/run.sh) for the full invocation.
+See [`scripts/run_orb_slam3.sh`](../scripts/run_orb_slam3.sh) for the full invocation.
+
+### Run modes
+- **Sequential** (default): frames fed back-to-back (DR clean-accuracy protocol). `--realtime` restores real-time pacing.
+- **VIO-only** (`--vio-only`): disables ORB-SLAM3's loop-closure / global-BA stage so it behaves as pure sliding-window VIO — comparable to OpenVINS/Basalt/SchurVINS. No source patch: `System.cc` reads a `loopClosing` YAML key, so the runner appends `loopClosing: 0` to a temp copy of `EuRoC.yaml`. Results land under a separate `<tag>_vioonly/` dir. On V1_01_easy the gap is negligible (0.019 vs 0.020 m — short sequence, little revisit); it grows on loop-heavy sequences.
 
 ## Validation (V1_01_easy, stereo-inertial)
 ATE pos RMSE (se3 alignment) = **0.020 m** (sim3 = 0.011 m), RPE ≈ 3 cm / 8 m — in line

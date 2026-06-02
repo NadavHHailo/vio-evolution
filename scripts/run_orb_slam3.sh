@@ -13,15 +13,16 @@
 # files use float-rounded ns that don't match our bag-derived names).
 set -euo pipefail
 
-usage() { echo "usage: run_orb_slam3.sh <seq> [--reps N] [--tag TAG] [--realtime]"; exit 1; }
+usage() { echo "usage: run_orb_slam3.sh <seq> [--reps N] [--tag TAG] [--realtime] [--vio-only]"; exit 1; }
 [ $# -ge 1 ] || usage
 SEQ="$1"; shift
-REPS=1; TAG="baseline_x86"; SEQUENTIAL=1
+REPS=1; TAG="baseline_x86"; SEQUENTIAL=1; VIO_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --reps)     REPS="$2"; shift 2;;
     --tag)      TAG="$2";  shift 2;;
     --realtime) SEQUENTIAL=0; shift;;   # default is sequential (DR clean-accuracy mode)
+    --vio-only) VIO_ONLY=1; shift;;     # disable loop closure / global BA (pure VIO, no SLAM stage)
     *) usage;;
   esac
 done
@@ -40,6 +41,20 @@ for p in "$BIN" "$VOC" "$YAML" "$ASL/mav0/cam0/data" "$GT" "$ADAPTER"; do
   [ -e "$p" ] || { echo "ERROR: missing $p" >&2; exit 1; }
 done
 
+# VIO-only: disable ORB-SLAM3's loop-closure / global-BA stage (System.cc reads the
+# `loopClosing` yaml key). We append it to a temp copy of EuRoC.yaml and store results
+# under a separate `<tag>_vioonly` dir so SLAM vs VIO-only runs never collide.
+if [ "$VIO_ONLY" = 1 ]; then
+  TAG="${TAG}_vioonly"
+  YAML_EFF="$(mktemp --suffix=.yaml)"
+  cp "$YAML" "$YAML_EFF"
+  printf '\nloopClosing: 0\n' >> "$YAML_EFF"
+  YAML="$YAML_EFF"
+  SLAM_MODE="vio-only (loop closure OFF)"
+else
+  SLAM_MODE="full SLAM (loop closure ON)"
+fi
+
 OUT="$HOME/results/orb_slam3/x86/native_jazzy/$TAG"
 mkdir -p "$OUT"
 export LD_LIBRARY_PATH="$HOME/opt/pangolin/lib:$ORB/lib:$ORB/Thirdparty/DBoW2/lib:$ORB/Thirdparty/g2o/lib:${LD_LIBRARY_PATH:-}"
@@ -47,7 +62,7 @@ if [ "$SEQUENTIAL" = 1 ]; then export VIO_EVAL_SEQUENTIAL=1; MODE=sequential; el
 
 TIMES="$OUT/${SEQ}_times.txt"
 ls "$ASL/mav0/cam0/data/" | sed 's/\.png$//' | sort -n > "$TIMES"
-echo "[$SEQ] $(wc -l < "$TIMES") frames; reps=$REPS; mode=$MODE; out=$OUT"
+echo "[$SEQ] $(wc -l < "$TIMES") frames; reps=$REPS; mode=$MODE; $SLAM_MODE; out=$OUT"
 
 for i in $(seq 0 $((REPS-1))); do
   WORK="$(mktemp -d)"
@@ -67,4 +82,5 @@ for i in $(seq 0 $((REPS-1))); do
   cp "$WORK/stdout.log" "$OUT/${SEQ}_rep${i}_stdout.log"
   rm -rf "$WORK"
 done
+[ "$VIO_ONLY" = 1 ] && rm -f "$YAML_EFF"
 echo "[$SEQ] done."
