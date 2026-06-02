@@ -244,18 +244,21 @@ End-to-end correctness gates (run after each phase):
 
 Reproducible end-to-end check (full sweep):
 ```bash
-# OpenVINS baseline comes from the existing catkin harness (its own path scheme):
-bash ~/workspace/catkin_ws_ov/scripts/run_full_benchmark.sh --tag baseline_x86   # writes ~/results/x86/native_jazzy/baseline_x86/<mode>/...
+# OpenVINS baseline: existing catkin harness, SERIAL mode, SINGLE thread (clean-accuracy,
+# deterministic; the DR's first-stage profiling). Writes ~/results/x86/native_jazzy/baseline_x86/serial/
+bash ~/workspace/catkin_ws_ov/scripts/run_full_benchmark.sh -m serial -t 1 -c stereo \
+  -s V1_01_easy,MH_03_medium,V2_02_medium --tag baseline_x86
 
-# The three new systems go through this repo's dispatcher:
-for sys in orb_slam3 basalt schurvins; do
-  for seq in V1_01_easy MH_03_medium V2_02_medium; do
-    bash vio-evaluation/scripts/run_system.sh "$sys" "$seq" --reps 5 --tag baseline_x86
-  done
+# ORB-SLAM3 (sequential mode; --vio-only for the loop-closure-off variant under <tag>_vioonly/):
+for seq in V1_01_easy MH_03_medium V2_02_medium; do
+  bash vio-evaluation/scripts/run_orb_slam3.sh "$seq" --tag baseline_x86
+  bash vio-evaluation/scripts/run_orb_slam3.sh "$seq" --tag baseline_x86 --vio-only
 done
+# (basalt / schurvins runners land in Phases 2/3.)
 
-# Aggregator reads both schemes (see §"Output convention"):
-python3 vio-evaluation/scripts/compare_report.py ~/results --tag baseline_x86 --out vio-evaluation/docs/comparison.md
+# Aggregator (OpenVINS 1thr serial + ORB-SLAM3 SLAM/VIO-only; DR §3.1 + §2.6 RPE-over-segments):
+python3 vio-evaluation/scripts/compare_report.py --tag baseline_x86 --openvins-thr 1 \
+  --out vio-evaluation/docs/comparison.md
 ```
 
 ---
