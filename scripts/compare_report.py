@@ -198,9 +198,12 @@ def main():
         "Aggregated mean ± std over reps. Accuracy via `ov_eval error_singlerun`; "
         "latency/FPS from per-frame timing; CPU/RSS from `/usr/bin/time -v`.",
         "RPE is the mean of per-segment medians (8/16/24/32/40 m). ORB-SLAM3 runs in "
-        "**sequential** mode. **x86 performance figures are illustrative** (DR: perf "
-        "profiling belongs on embedded HW). ORB-SLAM3's backend (local BA) is async, so "
-        "latency/FPS reflect the per-frame tracking front-end.",
+        "**sequential** mode and is reported in two variants: **(SLAM)** = full pipeline "
+        "with loop closure / global BA, and **(VIO-only)** = `loopClosing: 0` (pure "
+        "sliding-window VIO, comparable to OpenVINS/Basalt/SchurVINS). "
+        "**x86 performance figures are illustrative** (DR: perf profiling belongs on "
+        "embedded HW). ORB-SLAM3's backend (local BA) is async, so latency/FPS reflect "
+        "the per-frame tracking front-end.",
         "",
         "| System | Seq | ATE-t (m) | ATE-r (°) | RPE-t (m) | RPE-r (°) | Compl % | "
         "Trk-loss | Lat p50/p99 (ms) | FPS | CPU % | RSS (MB) | reps |",
@@ -210,8 +213,11 @@ def main():
         gt = f"{GT_DIR}/{seq}.txt"
         ovM, ovn = eval_openvins(args.root, seq, gt, args.align, args.openvins_est)
         orbM, orbn = eval_orb(args.root, args.tag, seq, gt, args.align)
+        vioM, vion = eval_orb(args.root, f"{args.tag}_vioonly", seq, gt, args.align)
         lines.append(row("openvins", seq, ovM, ovn))
-        lines.append(row("orb_slam3", seq, orbM, orbn))
+        lines.append(row("orb_slam3 (SLAM)", seq, orbM, orbn))
+        if vion > 0:
+            lines.append(row("orb_slam3 (VIO-only)", seq, vioM, vion))
 
     report = "\n".join(lines)
     print(report)
